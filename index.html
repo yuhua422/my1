@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日日好日 反省日記</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .is-today { background-color: #fef9c3; }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #4f46e5; /* Indigo-600 */
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <!-- 修正 1: 登入畫面 (手動輸入代號) -->
+    <div id="login-view" class="flex flex-col items-center justify-center min-h-screen text-center p-4">
+        <h1 class="text-4xl font-bold text-indigo-700 mb-4">日日好日 反省日記</h1>
+        <p class="text-lg text-gray-600 mb-8">請輸入您的使用者代號</p>
+        <div class="w-full max-w-sm">
+            <input id="user-id-input" type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg text-center" placeholder="例如：my-diary-001">
+            <button id="login-button" class="mt-4 w-full px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold shadow-lg hover:bg-blue-700 transition duration-300">
+                登入
+            </button>
+        </div>
+    </div>
+    
+    <!-- 移除 loading-view 和 logged-out-view -->
+
+    <!-- 主應用程式畫面 (預設隱藏) -->
+    <div id="app-view" class="hidden max-w-7xl mx-auto p-4 md:p-8">
+        <!-- 頂部標題欄 -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+            <h1 class="text-4xl font-bold text-indigo-700">日日好日 反省日記</h1>
+            <div class="text-lg text-gray-600 mt-2 md:mt-0 flex items-center space-x-4">
+                <div>
+                    <!-- 修正 3: 使用者 ID 將由手動輸入提供 -->
+                    使用者: <span id="user-display" class="font-semibold text-indigo-600"></span>
+                </div>
+                <!-- 登出按鈕 -->
+                <button id="logout-button" class="px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition text-sm">
+                    登出
+                </button>
+            </div>
+        </div>
+
+        <!-- 月曆容器 (結構不變) -->
+        <div class="bg-white rounded-xl shadow-xl overflow-hidden">
+            <!-- 月曆頂部控制列 -->
+            <div class="flex justify-between items-center px-6 py-4 bg-indigo-50 border-b border-indigo-100">
+                <button id="prev-month" class="p-2 rounded-full hover:bg-indigo-100 text-indigo-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <h2 id="month-year" class="text-2xl font-semibold text-indigo-800"></h2>
+                <button id="next-month" class="p-2 rounded-full hover:bg-indigo-100 text-indigo-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+            </div>
+            <!-- 星期標題 -->
+            <div class="grid grid-cols-7 gap-px text-center font-medium text-gray-500 bg-gray-50 p-2">
+                <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+            </div>
+            <!-- 日期網格 -->
+            <div id="calendar-grid" class="grid grid-cols-7 gap-px bg-gray-200"></div>
+        </div>
+    </div>
+
+    <!-- 日記填寫彈出視窗 (結構不變) -->
+    <div id="modal-view" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg transform transition-all scale-95 opacity-0" id="modal-content">
+            <!-- 視窗標題 -->
+            <div class="flex justify-between items-center px-6 py-4 bg-gray-50 border-b border-gray-200 rounded-t-xl">
+                <h3 class="text-2xl font-semibold text-gray-800">反省日記 - <span id="modal-date"></span></h3>
+                <button id="close-modal" class="p-2 rounded-full hover:bg-gray-200 text-gray-500">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <!-- 表單內容 -->
+            <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto no-scrollbar">
+                <div class="flex items-center">
+                    <input id="check-exercise" type="checkbox" class="h-6 w-6 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <label for="check-exercise" class="ml-3 text-lg font-medium text-gray-700">1. 運動</label>
+                </div>
+                <div class="flex items-center">
+                    <input id="check-mood" type="checkbox" class="h-6 w-6 text-green-600 border-gray-300 rounded focus:ring-green-500">
+                    <label for="check-mood" class="ml-3 text-lg font-medium text-gray-700">2. 好心情</label>
+                </div>
+                <div>
+                    <label for="text-gratitude" class="block text-lg font-medium text-gray-700 mb-2">3. 感恩的事</label>
+                    <textarea id="text-gratitude" rows="4" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="寫下三件值得感恩的小事..."></textarea>
+                </div>
+                <!-- 額外項目 (預設隱藏) -->
+                <div id="mood-follow-up" class="hidden space-y-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <p class="text-lg font-semibold text-red-800">請完成以下項目：</p>
+                    <div>
+                        <label for="text-reason" class="block text-md font-medium text-gray-700 mb-2">心情不好的原因</label>
+                        <textarea id="text-reason" rows="3" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="記錄一下發生了什麼..."></textarea>
+                    </div>
+                    <div class="flex items-center">
+                        <input id="check-sutra" type="checkbox" class="h-6 w-6 text-red-600 border-gray-300 rounded focus:ring-red-500">
+                        <label for="check-sutra" class="ml-3 text-md font-medium text-gray-700">已完成心經一篇的鍛鍊</label>
+                    </div>
+                </div>
+            </div>
+            <!-- 儲存按鈕 -->
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 rounded-b-xl">
+                <button id="save-button" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold shadow-lg hover:bg-blue-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    儲存本日記
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // 匯入 Firebase 模組
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        // *** 修正 4: 移除所有 Auth 模組 ***
+        import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, where, documentId, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 修正 5: 使用您提供的 firebaseConfig ---
+            const firebaseConfig = {
+              apiKey: "AIzaSyDfa5l4JlbI08cUgTw-beR5RTR3mXtVy7Y",
+              authDomain: "personal-cc55d.firebaseapp.com",
+              projectId: "personal-cc55d",
+              storageBucket: "personal-cc55d.firebasestorage.app",
+              messagingSenderId: "513967977877",
+              appId: "1:513967977877:web:3d642bab1586b9179d729c",
+              measurementId: "G-SBCNWGZ8SB"
+            };
+            
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+            // 移除 auth
+            setLogLevel('debug');
+
+            // --- Global Vars ---
+            let globalUserId = null; // 將由手動輸入提供
+            let currentDate = new Date();
+            let selectedDate = null;
+            const todayString = new Date().toISOString().split('T')[0]; 
+
+            // --- DOM Elements ---
+            // 修正 6: 更新 DOM 元素
+            const loginView = document.getElementById('login-view');
+            const loginButton = document.getElementById('login-button');
+            const userIdInput = document.getElementById('user-id-input');
+            const appView = document.getElementById('app-view');
+            const userDisplay = document.getElementById('user-display');
+            const logoutButton = document.getElementById('logout-button');
+            
+            const monthYear = document.getElementById('month-year');
+            const calendarGrid = document.getElementById('calendar-grid');
+            const prevMonthButton = document.getElementById('prev-month');
+            const nextMonthButton = document.getElementById('next-month');
+            const modalView = document.getElementById('modal-view');
+            const modalContent = document.getElementById('modal-content');
+            const closeModalButton = document.getElementById('close-modal');
+            const saveButton = document.getElementById('save-button');
+            const modalDate = document.getElementById('modal-date');
+            const checkExercise = document.getElementById('check-exercise');
+            const checkMood = document.getElementById('check-mood');
+            const textGratitude = document.getElementById('text-gratitude');
+            const moodFollowUp = document.getElementById('mood-follow-up');
+            const textReason = document.getElementById('text-reason');
+            const checkSutra = document.getElementById('check-sutra');
+
+            // --- 修正 6: 重構為手動登入邏輯 ---
+            
+            // 登入按鈕
+            loginButton.addEventListener('click', () => {
+                const userId = userIdInput.value.trim();
+                if (!userId) {
+                    alert("請輸入使用者代號");
+                    return;
+                }
+                globalUserId = userId;
+                userDisplay.textContent = globalUserId;
+                
+                // 記住代號
+                localStorage.setItem('diaryUserId', globalUserId);
+                
+                loginView.classList.add('hidden');
+                appView.classList.remove('hidden');
+                
+                console.log("登入成功, UserID:", globalUserId);
+                renderCalendar();
+            });
+
+            // 登出按鈕
+            logoutButton.addEventListener('click', () => {
+                globalUserId = null;
+                localStorage.removeItem('diaryUserId'); // 清除記憶
+                
+                appView.classList.add('hidden');
+                loginView.classList.remove('hidden');
+                loginView.classList.add('flex');
+                console.log("使用者已登出");
+            });
+            
+            // 頁面載入時，檢查是否有記住的 ID
+            function checkSavedUser() {
+                const savedUserId = localStorage.getItem('diaryUserId');
+                if (savedUserId) {
+                    userIdInput.value = savedUserId;
+                    // 讓使用者仍需按登入
+                }
+                // 隱藏 app-view 並顯示 login-view
+                appView.classList.add('hidden');
+                loginView.classList.remove('hidden');
+                loginView.classList.add('flex');
+                // 移除 loading view
+                const loadingView = document.getElementById('loading-view');
+                if(loadingView) loadingView.classList.add('hidden');
+            }
+
+            // --- 月曆邏輯 ---
+            async function renderCalendar() {
+                console.log(`[Debug] 嘗試渲染月曆。 globalUserId: ${globalUserId}`);
+
+                if (!globalUserId) {
+                    console.error("無法渲染月曆: globalUserId 無效。");
+                    calendarGrid.innerHTML = `<p class="text-red-500 p-4 col-span-7">無法載入月曆：使用者 ID 無效。</p>`;
+                    return;
+                }
+
+                calendarGrid.innerHTML = '';
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth(); 
+
+                monthYear.textContent = `${year}年 ${month + 1}月`;
+                const firstDayOfWeek = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+                const monthStart = `${year}-${(month + 1).toString().padStart(2, '0')}-01`;
+                const monthEnd = `${year}-${(month + 1).toString().padStart(2, '0')}-${daysInMonth.toString().padStart(2, '0')}`;
+                
+                const monthDataMap = new Map();
+                
+                // *** 修正 7: 更改為 "diaries" 集合路徑 ***
+                const collectionPath = `diaries/${globalUserId}/reflections`;
+                console.log(`[Debug] 執行 Firestore 查詢: ${collectionPath}`);
+                const reflectionsCol = collection(db, 'diaries', globalUserId, 'reflections');
+                
+                const q = query(reflectionsCol, 
+                    where(documentId(), '>=', monthStart), 
+                    where(documentId(), '<=', monthEnd)
+                );
+
+                try {
+                    const querySnapshot = await getDocs(q);
+                    querySnapshot.forEach(doc => {
+                        monthDataMap.set(doc.id, doc.data());
+                    });
+                    console.log(`[Debug] 成功獲取 ${querySnapshot.size} 筆資料。`);
+                } catch (e) {
+                    console.error("讀取資料時出錯 (請檢查您的 Firestore 安全規則): ", e);
+                    // 顯示 Firestore 規則提示
+                    calendarGrid.innerHTML = `<div class="p-4 col-span-7 text-center text-red-600">
+                        <p class="font-bold">讀取資料時出錯：權限不足。</p>
+                        <p class="text-sm">請檢查您的 Firebase 控制台 (personal-cc55d) 的 Firestore '規則' 分頁是否已設為：</p>
+                        <pre class="mt-2 p-2 bg-gray-100 text-left text-xs rounded">
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /diaries/{userId}/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}</pre>
+                    </div>`;
+                }
+
+                for (let i = 0; i < firstDayOfWeek; i++) {
+                    calendarGrid.appendChild(createEmptyDayCell());
+                }
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const dateString = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                    const dayData = monthDataMap.get(dateString);
+                    calendarGrid.appendChild(createDayCell(day, dateString, dayData));
+                }
+            }
+
+            function createEmptyDayCell() {
+                const cell = document.createElement('div');
+                cell.className = 'bg-gray-50';
+                return cell;
+            }
+
+            function createDayCell(day, dateString, dayData) {
+                const cell = document.createElement('div');
+                cell.className = 'h-20 md:h-28 p-2 bg-white hover:bg-indigo-50 cursor-pointer transition duration-150 ease-in-out flex flex-col'; 
+                cell.dataset.date = dateString;
+
+                if (dateString === todayString) {
+                    cell.classList.add('is-today');
+                }
+
+                const exerciseAchieved = dayData?.exercise === true;
+                const moodAchieved = dayData?.goodMood === true;
+                const gratitudeAchieved = dayData?.gratitude && dayData.gratitude.trim() !== '';
+
+                // 運動 (閃電)
+                const exerciseIconSVG = `
+                    <svg class="w-4 h-4 ${exerciseAchieved ? 'text-blue-500' : 'text-gray-300'}" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
+                    </svg>
+                `;
+                // 心情 (笑臉)
+                const moodIconSVG = `
+                    <svg class="w-4 h-4 ${moodAchieved ? 'text-green-500' : 'text-gray-300'}" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                `;
+                // 感恩 (愛心)
+                const gratitudeIconSVG = `
+                    <svg class="w-4 h-4 ${gratitudeAchieved ? 'text-red-500' : 'text-gray-300'}" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path>
+                    </svg>
+                `;
+
+                cell.innerHTML = `
+                    <div class="text-right text-sm">${day}</div>
+                    <div class="flex-grow"></div> 
+                    <div class="flex justify-center items-center space-x-1">
+                        ${exerciseIconSVG}
+                        ${moodIconSVG}
+                        ${gratitudeIconSVG}
+                    </div>
+                `;
+
+                cell.addEventListener('click', () => openModal(dateString));
+                return cell;
+            }
+
+            // 月份切換
+            prevMonthButton.addEventListener('click', () => {
+                currentDate.setMonth(currentDate.getMonth() - 1);
+                renderCalendar();
+            });
+
+            nextMonthButton.addEventListener('click', () => {
+                currentDate.setMonth(currentDate.getMonth() + 1);
+                renderCalendar();
+            });
+
+            // --- 彈出視窗邏輯 ---
+            async function openModal(dateString) {
+                if (!globalUserId) { // 增加安全檢查
+                    console.error("尚未登入，無法開啟日記。");
+                    return;
+                }
+                selectedDate = dateString;
+                modalDate.textContent = dateString;
+
+                resetModalForm();
+
+                modalView.classList.remove('hidden');
+                await new Promise(resolve => setTimeout(resolve, 10));
+                modalContent.classList.remove('scale-95', 'opacity-0');
+
+                try {
+                    // *** 修正 8: 更改為 "diaries" 集合路徑 ***
+                    const docPath = `diaries/${globalUserId}/reflections/${selectedDate}`;
+                    console.log(`[Debug] 讀取文件: ${docPath}`);
+                    const docRef = doc(db, 'diaries', globalUserId, 'reflections', selectedDate);
+                    const docSnap = await getDoc(docRef);
+
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        checkExercise.checked = data.exercise || false;
+                        checkMood.checked = data.goodMood || false;
+                        textGratitude.value = data.gratitude || '';
+                        textReason.value = data.reason || '';
+                        checkSutra.checked = data.sutra || false;
+                    }
+                } catch (e) {
+                    console.error("讀取文件失敗: ", e);
+                }
+                
+                updateMoodFollowUp();
+            }
+
+            function closeModal() {
+                modalContent.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => {
+                    modalView.classList.add('hidden');
+                    selectedDate = null;
+                }, 300);
+            }
+
+            function resetModalForm() {
+                checkExercise.checked = false;
+                checkMood.checked = true;
+                textGratitude.value = '';
+                textReason.value = '';
+                checkSutra.checked = false;
+                moodFollowUp.classList.add('hidden');
+            }
+
+            checkMood.addEventListener('change', updateMoodFollowUp);
+
+            function updateMoodFollowUp() {
+                if (checkMood.checked) {
+                    moodFollowUp.classList.add('hidden');
+                } else {
+                    moodFollowUp.classList.remove('hidden');
+                }
+            }
+
+            closeModalButton.addEventListener('click', closeModal);
+            modalView.addEventListener('click', (e) => {
+                if (e.target === modalView) {
+                    closeModal();
+                }
+            });
+
+            // --- 儲存資料邏輯 ---
+            saveButton.addEventListener('click', async () => {
+                if (!globalUserId || !selectedDate) {
+                    console.error("發生錯誤，請重新登入。");
+                    return;
+                }
+
+                const data = {
+                    exercise: checkExercise.checked,
+                    goodMood: checkMood.checked,
+                    gratitude: textGratitude.value,
+                    reason: !checkMood.checked ? textReason.value : null,
+                    sutra: !checkMood.checked ? checkSutra.checked : null,
+                };
+
+                try {
+                    // *** 修正 9: 更改為 "diaries" 集合路徑 ***
+                    const docPath = `diaries/${globalUserId}/reflections/${selectedDate}`;
+                    console.log(`[Debug] 儲存資料: ${docPath}`);
+                    const docRef = doc(db, 'diaries', globalUserId, 'reflections', selectedDate);
+                    await setDoc(docRef, data, { merge: true });
+
+                    const oldCell = document.querySelector(`[data-date="${selectedDate}"]`);
+                    if (oldCell) {
+                        const day = parseInt(selectedDate.split('-')[2], 10);
+                        const newCell = createDayCell(day, selectedDate, data);
+                        oldCell.parentNode.replaceChild(newCell, oldCell);
+                    }
+                    
+                    closeModal();
+
+                } catch (e) {
+                    console.error("儲存文件失敗: ", e);
+                }
+            });
+
+            // --- 修正 10: 初始啟動 ---
+            checkSavedUser(); // 檢查是否有儲存的ID
+
+        }); // *** 結束 DOMContentLoaded 監聽器 ***
+        
+    </script>
+</body>
+</html>
